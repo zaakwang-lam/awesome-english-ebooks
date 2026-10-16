@@ -1,30 +1,41 @@
-name: Sync with Upstream
+name: Sync Economist Only
 
 on:
   schedule:
-    # Run every day at 02:00 UTC (adjust as needed)
+    # Every day at 02:00 UTC (Beijing 10:00)
     - cron: '0 2 * * *'
-  workflow_dispatch:  # Allow manual trigger
+  workflow_dispatch:
 
 jobs:
-  sync:
+  sync-economist:
     runs-on: ubuntu-latest
     steps:
-      - name: Checkout fork
+      - name: Checkout this repo
         uses: actions/checkout@v4
         with:
           ref: master
-          fetch-depth: 0
+          fetch-depth: 1
+          sparse-checkout: |
+            01_economist
+            .github
+          sparse-checkout-cone-mode: true
 
-      - name: Sync with upstream
-        uses: aormsby/Fork-Sync-With-Upstream-action@v3.4
-        with:
-          upstream_repository: hehonghui/awesome-english-ebooks
-          upstream_branch: master
-          target_branch: master
-          github_token: ${{ secrets.GITHUB_TOKEN }}
-          git_pull_args: --ff-only
+      - name: Fetch upstream Economist only
+        run: |
+          git remote add upstream https://github.com/hehonghui/awesome-english-ebooks.git || true
+          git fetch upstream master --depth=1
+          # Extract only the 01_economist directory from upstream
+          git checkout upstream/master -- 01_economist
 
-      - name: Report status
-        if: steps.sync.outputs.has_new_commits == 'true'
-        run: echo "Successfully synced new commits from upstream."
+      - name: Commit and push if changed
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add 01_economist
+          if git diff --cached --quiet; then
+            echo "No changes in Economist files."
+          else
+            git commit -m "Sync Economist (01_economist) from upstream"
+            git push
+            echo "Economist files synced."
+          fi
